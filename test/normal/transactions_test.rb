@@ -100,6 +100,20 @@ describe 'GET /transactions' do
     assert_equal '99.99', body.first['amount']
   end
 
+  it 'to filter includes a transaction with sub-second precision at end of the to date' do
+    # 23:59:59.500 UTC on the to-date must not be cut off by <= 23:59:59.000
+    Transaction.create!(merchant: merchant, amount: 777.0, currency: 'USD',
+                        created_at: Time.utc(2026, 5, 31, 23, 59, 59, 500_000))
+    Transaction.create!(merchant: merchant, amount: 888.0, currency: 'USD',
+                        created_at: Time.utc(2026, 6, 1, 0, 0, 0))
+
+    get '/transactions?to=2026-05-31'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal '777.0', body.first['amount']
+  end
+
   it 'to filter includes transactions at any time on the to date in UTC' do
     # 2026-05-31 23:00 UTC is still May 31 in UTC — must appear with to=2026-05-31
     Transaction.create!(merchant: merchant, amount: 999.00, currency: 'GBP',

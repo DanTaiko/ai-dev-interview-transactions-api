@@ -27,7 +27,7 @@ class Transaction < ActiveRecord::Base
   def self.scope_by_timeframe(from: nil, to: nil)
     scope = all
     scope = scope.where('created_at >= ?', parse_lower_bound(from)) if from.present?
-    scope = scope.where('created_at <= ?', parse_upper_bound(to))   if to.present?
+    scope = scope.where('created_at < ?',  parse_upper_bound(to))   if to.present?
     scope
   end
 
@@ -42,9 +42,7 @@ class Transaction < ActiveRecord::Base
   end
 
   private_class_method def self.parse_upper_bound(str)
-    # Bare-date `to` uses end-of-UTC-day (23:59:59) so the whole day is included.
-    # Datetime `to` is used as-is — caller controls the exact upper bound.
-    datetime?(str) ? Time.parse(str).utc : utc_date(str) + 1.day - 1.second
+    datetime?(str) ? Time.parse(str).utc : utc_date(str) + 1.day
   end
 
   private_class_method def self.datetime?(str) = str.include?('T')
