@@ -1,0 +1,33 @@
+#!/usr/bin/env ruby
+require 'fileutils'
+
+root = File.expand_path('..', __dir__)
+Dir.chdir(root)
+
+FileUtils.mkdir_p('db')
+db_path = File.join(root, 'db/development.sqlite3')
+File.delete(db_path) if File.exist?(db_path)
+
+require_relative '../app'
+
+ActiveRecord::Schema.define do
+  create_table :merchants do |t|
+    t.string :name, null: false
+    t.timestamps
+  end
+
+  create_table :transactions do |t|
+    t.references :merchant, null: false, foreign_key: true
+    t.decimal :amount, precision: 10, scale: 2, null: false
+    t.string :currency, null: false
+    t.timestamps
+  end
+
+  add_index :transactions, :created_at
+  add_index :transactions, :currency
+end
+
+load File.expand_path('../db/seeds.rb', __dir__)
+
+puts "Setup complete. #{Transaction.count} transactions across #{Merchant.count} merchants."
+puts "Run `ruby app.rb` to start the server on http://localhost:4567"
