@@ -57,6 +57,21 @@ describe 'GET /transactions' do
   end
 
   # ISO 8601 datetime with offset
+  it 'from without offset is treated as UTC, not server timezone' do
+    # If the server TZ were Europe/London (BST = UTC+1), Time.parse('2026-05-01T01:00:00')
+    # without offset would give 2026-05-01 00:00 UTC — wrong. Should stay 01:00 UTC.
+    Transaction.create!(merchant: merchant, amount: 1.0, currency: 'USD',
+                        created_at: Time.utc(2026, 5, 1, 0, 59))  # before 01:00 UTC → excluded
+    Transaction.create!(merchant: merchant, amount: 2.0, currency: 'USD',
+                        created_at: Time.utc(2026, 5, 1, 1,  0))  # exactly at → included
+
+    get '/transactions?from=2026-05-01T01:00:00'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal '2.0', body.first['amount']
+  end
+
   it 'from with timezone offset converts to UTC lower bound' do
     # 2026-05-01T00:00:00+09:00 = 2026-04-30T15:00:00Z
     Transaction.create!(merchant: merchant, amount: 1.0, currency: 'USD',

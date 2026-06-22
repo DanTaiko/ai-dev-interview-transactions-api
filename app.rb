@@ -38,14 +38,20 @@ class Transaction < ActiveRecord::Base
   end
 
   private_class_method def self.parse_lower_bound(str)
-    datetime?(str) ? Time.parse(str).utc : utc_date(str)
+    datetime?(str) ? parse_datetime(str) : utc_date(str)
   end
 
   private_class_method def self.parse_upper_bound(str)
-    datetime?(str) ? Time.parse(str).utc : utc_date(str) + 1.day
+    datetime?(str) ? parse_datetime(str) : utc_date(str) + 1.day
   end
 
   private_class_method def self.datetime?(str) = str.include?('T')
+
+  # Strings without a UTC offset are treated as UTC, not the server's local timezone.
+  private_class_method def self.parse_datetime(str)
+    normalized = str.match?(/[Zz]$|[+-]\d{2}:?\d{2}$/) ? str : "#{str}Z"
+    Time.parse(normalized).utc
+  end
 
   private_class_method def self.utc_date(str)
     d = Date.iso8601(str)
