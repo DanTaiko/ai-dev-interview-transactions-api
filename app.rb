@@ -21,6 +21,9 @@ end
 class Transaction < ActiveRecord::Base
   belongs_to :merchant
 
+  # Accepts bare dates ("2026-05-01") or ISO 8601 datetimes with offset
+  # ("2026-05-01T00:00:00+09:00"). Bare dates are treated as UTC day
+  # boundaries so results are consistent regardless of server timezone.
   def self.scope_by_timeframe(from: nil, to: nil)
     scope = all
     scope = scope.where('created_at >= ?', parse_lower_bound(from)) if from.present?
@@ -28,6 +31,7 @@ class Transaction < ActiveRecord::Base
     scope
   end
 
+  # Accepts a comma-separated list ("USD,EUR"). Unknown codes return no rows.
   def self.scope_by_currency(currency: nil)
     return all if currency.blank?
     where(currency: currency.split(','))
@@ -38,6 +42,8 @@ class Transaction < ActiveRecord::Base
   end
 
   private_class_method def self.parse_upper_bound(str)
+    # Bare-date `to` uses end-of-UTC-day (23:59:59) so the whole day is included.
+    # Datetime `to` is used as-is — caller controls the exact upper bound.
     datetime?(str) ? Time.parse(str).utc : utc_date(str) + 1.day - 1.second
   end
 
