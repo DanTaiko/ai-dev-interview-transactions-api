@@ -177,4 +177,11 @@ describe 'GET /transactions' do
     assert_equal 200, last_response.status
     assert_equal [], body
   end
+
+  # Invalid date param handling
+  it 'returns 400 for a string with T that is not a valid datetime' do
+    get '/transactions?from=TIMEOUT'
+
+    assert_equal 400, last_response.status
+  end
 end

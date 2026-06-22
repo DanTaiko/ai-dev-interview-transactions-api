@@ -21,41 +21,38 @@ end
 class Transaction < ActiveRecord::Base
   belongs_to :merchant
 
-  # Accepts bare dates ("2026-05-01") or ISO 8601 datetimes with offset
-  # ("2026-05-01T00:00:00+09:00"). Bare dates are treated as UTC day
-  # boundaries so results are consistent regardless of server timezone.
-  def self.scope_by_timeframe(from: nil, to: nil)
-    scope = all
-    scope = scope.where('created_at >= ?', parse_lower_bound(from)) if from.present?
-    scope = scope.where('created_at < ?',  parse_upper_bound(to))   if to.present?
-    scope
-  end
+  class << self
+    # Accepts bare dates ("2026-05-01") or ISO 8601 datetimes with offset
+    # ("2026-05-01T00:00:00+09:00"). Bare dates are treated as UTC day
+    # boundaries so results are consistent regardless of server timezone.
+    def scope_by_timeframe(from: nil, to: nil)
+      scope = all
+      scope = scope.where('created_at >= ?', parse_bound(from))                   if from.present?
+      scope = scope.where('created_at < ?',  parse_bound(to, date_offset: 1.day)) if to.present?
+      scope
+    end
 
-  # Accepts a comma-separated list ("USD,EUR"). Unknown codes return no rows.
-  def self.scope_by_currency(currency: nil)
-    return all if currency.blank?
-    where(currency: currency.split(','))
-  end
+    # Accepts a comma-separated list ("USD,EUR"). Unknown codes return no rows.
+    def scope_by_currency(currency: nil)
+      return all if currency.blank?
+      where(currency: currency.split(','))
+    end
 
-  private_class_method def self.parse_lower_bound(str)
-    datetime?(str) ? parse_datetime(str) : utc_date(str)
-  end
+    private
 
-  private_class_method def self.parse_upper_bound(str)
-    datetime?(str) ? parse_datetime(str) : utc_date(str) + 1.day
-  end
+    def parse_bound(str, date_offset: 0)
+      Time.iso8601(with_utc_offset(str)).utc
+    rescue ArgumentError
+      d = Date.iso8601(str)
+      Time.utc(d.year, d.month, d.day) + date_offset
+    end
 
-  private_class_method def self.datetime?(str) = str.include?('T')
-
-  # Strings without a UTC offset are treated as UTC, not the server's local timezone.
-  private_class_method def self.parse_datetime(str)
-    normalized = str.match?(/[Zz]$|[+-]\d{2}:?\d{2}$/) ? str : "#{str}Z"
-    Time.parse(normalized).utc
-  end
-
-  private_class_method def self.utc_date(str)
-    d = Date.iso8601(str)
-    Time.utc(d.year, d.month, d.day)
+    # Only normalises datetime strings (those with T); bare dates are left unchanged
+    # so they fall through to Date.iso8601 in the rescue branch above.
+    def with_utc_offset(str)
+      return str unless str.include?('T')
+      str.match?(/[Zz]$|[+-]\d{2}:?\d{2}$/) ? str : "#{str}Z"
+    end
   end
 end
 
@@ -81,4 +78,7 @@ get '/transactions' do
          .scope_by_currency(currency: params[:currency])
          .includes(:merchant)
          .map { |t| TransactionSerializer.new(t).as_json }
+rescue ArgumentError, Date::Error => e
+  status 400
+  json error: e.message
 end
