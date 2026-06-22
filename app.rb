@@ -75,5 +75,6 @@ get '/transactions' do
   json Transaction
          .scope_by_timeframe(from: params[:from], to: params[:to])
          .scope_by_currency(currency: params[:currency])
+         .includes(:merchant)
          .map { |t| TransactionSerializer.new(t).as_json }
 end

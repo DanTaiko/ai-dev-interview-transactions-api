@@ -14,6 +14,23 @@ describe 'GET /transactions' do
     assert_equal 2, body.length
   end
 
+  it 'loads merchants in a single query regardless of result size' do
+    merchant2 = Merchant.create!(name: 'Globex')
+    Transaction.create!(merchant: merchant,  amount: 100, currency: 'USD', created_at: 1.day.ago)
+    Transaction.create!(merchant: merchant2, amount: 200, currency: 'USD', created_at: 1.day.ago)
+    Transaction.create!(merchant: merchant,  amount: 300, currency: 'USD', created_at: 1.day.ago)
+
+    query_count = 0
+    counter = ->(*, **) { query_count += 1 }
+    ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+      get '/transactions'
+    end
+
+    assert_equal 200, last_response.status
+    # 1 query for transactions + 1 query for merchants (IN) = 2 total, not 4
+    assert query_count <= 2, "Expected ≤2 queries, got #{query_count}"
+  end
+
   it 'filters by `from` date' do
     Transaction.create!(merchant: merchant, amount: 100, currency: 'USD', created_at: 30.days.ago)
     Transaction.create!(merchant: merchant, amount: 200, currency: 'USD', created_at: 5.days.ago)
