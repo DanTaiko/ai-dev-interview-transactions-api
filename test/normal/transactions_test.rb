@@ -96,4 +96,39 @@ describe 'GET /transactions' do
     assert_equal 1, body.length
     assert_equal '999.0', body.first['amount']
   end
+
+  # Currency filter
+  it 'filters by a single currency' do
+    Transaction.create!(merchant: merchant, amount: 100, currency: 'USD', created_at: 1.day.ago)
+    Transaction.create!(merchant: merchant, amount: 200, currency: 'EUR', created_at: 1.day.ago)
+    Transaction.create!(merchant: merchant, amount: 300, currency: 'GBP', created_at: 1.day.ago)
+
+    get '/transactions?currency=USD'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal 'USD', body.first['currency']
+  end
+
+  it 'filters by multiple comma-separated currencies' do
+    Transaction.create!(merchant: merchant, amount: 100, currency: 'USD', created_at: 1.day.ago)
+    Transaction.create!(merchant: merchant, amount: 200, currency: 'EUR', created_at: 1.day.ago)
+    Transaction.create!(merchant: merchant, amount: 300, currency: 'GBP', created_at: 1.day.ago)
+
+    get '/transactions?currency=USD,EUR'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 2, body.length
+    assert_equal %w[USD EUR].sort, body.map { |t| t['currency'] }.sort
+  end
+
+  it 'returns empty result for unknown currency' do
+    Transaction.create!(merchant: merchant, amount: 100, currency: 'USD', created_at: 1.day.ago)
+
+    get '/transactions?currency=XYZ'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 200, last_response.status
+    assert_equal [], body
+  end
 end

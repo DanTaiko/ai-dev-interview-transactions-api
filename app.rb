@@ -28,6 +28,11 @@ class Transaction < ActiveRecord::Base
     scope
   end
 
+  def self.scope_by_currency(currency: nil)
+    return all if currency.blank?
+    where(currency: currency.split(','))
+  end
+
   private_class_method def self.parse_lower_bound(str)
     datetime?(str) ? Time.parse(str).utc : utc_date(str)
   end
@@ -61,5 +66,8 @@ class TransactionSerializer
 end
 
 get '/transactions' do
-  json Transaction.scope_by_timeframe(from: params[:from], to: params[:to]).map { |t| TransactionSerializer.new(t).as_json }
+  json Transaction
+         .scope_by_timeframe(from: params[:from], to: params[:to])
+         .scope_by_currency(currency: params[:currency])
+         .map { |t| TransactionSerializer.new(t).as_json }
 end
