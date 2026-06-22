@@ -38,4 +38,62 @@ describe 'GET /transactions' do
     assert_equal 1, body.length
     assert_equal '200.0', body.first['amount']
   end
+
+  # ISO 8601 datetime with offset
+  it 'from with timezone offset converts to UTC lower bound' do
+    # 2026-05-01T00:00:00+09:00 = 2026-04-30T15:00:00Z
+    Transaction.create!(merchant: merchant, amount: 1.0, currency: 'USD',
+                        created_at: Time.utc(2026, 4, 30, 14, 59)) # before → excluded
+    Transaction.create!(merchant: merchant, amount: 2.0, currency: 'USD',
+                        created_at: Time.utc(2026, 4, 30, 15, 0))  # exactly at bound → included
+
+    get '/transactions?from=2026-05-01T00:00:00%2B09:00'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal '2.0', body.first['amount']
+  end
+
+  it 'to with timezone offset converts to UTC upper bound' do
+    # 2026-05-31T23:59:59+09:00 = 2026-05-31T14:59:59Z
+    Transaction.create!(merchant: merchant, amount: 1.0, currency: 'USD',
+                        created_at: Time.utc(2026, 5, 31, 14, 59)) # within bound → included
+    Transaction.create!(merchant: merchant, amount: 2.0, currency: 'USD',
+                        created_at: Time.utc(2026, 5, 31, 15, 0))  # June 1 00:00 Tokyo → excluded
+
+    get '/transactions?to=2026-05-31T23:59:59%2B09:00'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal '1.0', body.first['amount']
+  end
+
+  # Timezone boundary tests — dates are UTC day boundaries regardless of server TZ
+  it 'from filter excludes a transaction at 23:30 UTC on the day before the from date' do
+    # 2026-04-30 23:30 UTC is still April 30 in UTC — must not appear with from=2026-05-01
+    Transaction.create!(merchant: merchant, amount: 56.25, currency: 'GBP',
+                        created_at: Time.utc(2026, 4, 30, 23, 30))
+    Transaction.create!(merchant: merchant, amount: 99.99, currency: 'USD',
+                        created_at: Time.utc(2026, 5, 1, 0, 30))
+
+    get '/transactions?from=2026-05-01'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal '99.99', body.first['amount']
+  end
+
+  it 'to filter includes transactions at any time on the to date in UTC' do
+    # 2026-05-31 23:00 UTC is still May 31 in UTC — must appear with to=2026-05-31
+    Transaction.create!(merchant: merchant, amount: 999.00, currency: 'GBP',
+                        created_at: Time.utc(2026, 5, 31, 23, 0))
+    Transaction.create!(merchant: merchant, amount: 120.00, currency: 'USD',
+                        created_at: Time.utc(2026, 6, 1, 0, 0))
+
+    get '/transactions?to=2026-05-31'
+
+    body = JSON.parse(last_response.body)
+    assert_equal 1, body.length
+    assert_equal '999.0', body.first['amount']
+  end
 end

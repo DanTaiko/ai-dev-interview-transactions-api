@@ -20,6 +20,28 @@ end
 
 class Transaction < ActiveRecord::Base
   belongs_to :merchant
+
+  def self.scope_by_timeframe(from: nil, to: nil)
+    scope = all
+    scope = scope.where('created_at >= ?', parse_lower_bound(from)) if from.present?
+    scope = scope.where('created_at <= ?', parse_upper_bound(to))   if to.present?
+    scope
+  end
+
+  private_class_method def self.parse_lower_bound(str)
+    datetime?(str) ? Time.parse(str).utc : utc_date(str)
+  end
+
+  private_class_method def self.parse_upper_bound(str)
+    datetime?(str) ? Time.parse(str).utc : utc_date(str) + 1.day - 1.second
+  end
+
+  private_class_method def self.datetime?(str) = str.include?('T')
+
+  private_class_method def self.utc_date(str)
+    d = Date.iso8601(str)
+    Time.utc(d.year, d.month, d.day)
+  end
 end
 
 class TransactionSerializer
@@ -39,15 +61,5 @@ class TransactionSerializer
 end
 
 get '/transactions' do
-  scope = Transaction.all
-
-  if params[:from].present?
-    scope = scope.where('created_at >= ?', Time.zone.parse(params[:from]))
-  end
-
-  if params[:to].present?
-    scope = scope.where('created_at <= ?', Time.zone.parse(params[:to]))
-  end
-
-  json scope.map { |t| TransactionSerializer.new(t).as_json }
+  json Transaction.scope_by_timeframe(from: params[:from], to: params[:to]).map { |t| TransactionSerializer.new(t).as_json }
 end
